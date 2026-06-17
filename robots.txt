@@ -1,4 +1,0 @@
-User-agent: *
-Allow: /
-
-Sitemap: https://AIerlIz.github.io/GameSeeker/sitemap.xml
