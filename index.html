@@ -956,7 +956,7 @@
                 }
                 document.getElementById('recTabCount').textContent = games.length;
 
-                recGamesAll = games.filter(g => g.type === undefined || g.type === 'game');
+                recGamesAll = games;
                 rebuildRecUI();
                 document.getElementById('footer').innerHTML = '由 AI + DeepSteam V50 算法生成 | ' + new Date().toISOString().slice(0, 10) + ' <span id="version" style="color:#334155">' + APP_VERSION + '</span>';
                 bindGridWheel();
