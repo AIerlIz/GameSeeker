@@ -1,6 +1,6 @@
 {
   "name": "识游 · GameSeeker",
-  "short_name": "GameSeeker",
+  "short_name": "识游",
   "description": "AI 驱动的 Steam 游戏探索工具",
   "start_url": "/",
   "display": "standalone",
