@@ -350,7 +350,7 @@
     </div>
 
     <script>
-        const APP_VERSION = 'v1.9.0';
+        const APP_VERSION = 'v1.9.1';
         const PROXY_BASE = '__PROXY_BASE__';
 
         // ===== UA 检测 =====
@@ -389,9 +389,23 @@
             return `<span>¥${f.toFixed(0)}</span>`;
         }
 
-        function bayesianRating(review, C = 100, prior = 0.8) {
+        let globalPrior = 0.8;
+
+        function computeGlobalPrior() {
+            let totalPos = 0, totalAll = 0;
+            for (const g of recGamesAll) {
+                const r = g.review;
+                if (r && r.total > 0) {
+                    totalPos += r.positive;
+                    totalAll += r.total;
+                }
+            }
+            if (totalAll > 0) globalPrior = totalPos / totalAll;
+        }
+
+        function bayesianRating(review, C = 100) {
             if (!review || review.total <= 0) return 0;
-            return (review.positive + C * prior) / (review.total + C);
+            return (review.positive + C * globalPrior) / (review.total + C);
         }
 
         function calcRating(review) {
@@ -959,6 +973,7 @@
                 document.getElementById('recTabCount').textContent = games.length;
 
                 recGamesAll = games;
+                computeGlobalPrior();
                 rebuildRecUI();
                 document.getElementById('footer').innerHTML = '由 AI + DeepSteam V50 算法生成 | ' + new Date().toISOString().slice(0, 10) + ' <span id="version" style="color:#334155">' + APP_VERSION + '</span>';
                 bindGridWheel();
