@@ -749,7 +749,7 @@ def main() -> None:
 
     data = {
         "games": new_entries,
-        "total_owned": api_game_count if api_game_count > 0 else len(owned_games),
+        "total_owned": api_game_count if api_game_count > 0 else len(owned_games_data),
     }
     save_games_json(base_dir, data)
     new_appids = [r.get("appid") for r in new_recs]
