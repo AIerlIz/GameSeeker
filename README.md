@@ -4,7 +4,7 @@
 
 <h1 align="center">识游 · GameSeeker</h1>
 
-<p align="center">基于 LLM 分析 Steam 游戏库偏好自动推荐未拥有游戏，同时提供完整的游戏库浏览与管理页面。</p>
+<p align="center">AI 驱动的 Steam 游戏探索工具</p>
 
 ## 快速开始
 
