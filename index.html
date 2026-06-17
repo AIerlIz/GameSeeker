@@ -988,7 +988,7 @@
             const panel = document.getElementById('toolbar');
             const header = panel.querySelector('.toolbar-header');
             const EDGE = 30;
-            const SHOW_DELAY = 300;
+            const SHOW_DELAY = 200;
             let hideTimer = null;
             let showTimer = null;
             let overWrap = false;
@@ -1009,7 +1009,7 @@
                 hideTimer = setTimeout(() => {
                     panel.classList.remove('visible');
                     wrap.classList.remove('pointer-active');
-                }, 1000);
+                }, 500);
             }
 
             function showOnSide(newSide) {
