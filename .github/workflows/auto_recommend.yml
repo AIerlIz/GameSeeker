@@ -59,6 +59,11 @@ jobs:
       - name: 生成 RSS feed
         run: python .github/scripts/generate_feed.py
 
+      - name: 生成 PWA 图标
+        run: |
+          pip install cairosvg
+          python .github/scripts/generate_pwa_assets.py
+
       - name: Setup Pages
         uses: actions/configure-pages@v5
 
