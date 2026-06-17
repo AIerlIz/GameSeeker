@@ -350,7 +350,7 @@
     </div>
 
     <script>
-        const APP_VERSION = 'v1.9.1';
+        const APP_VERSION = 'v1.9.2';
         const PROXY_BASE = '__PROXY_BASE__';
 
         // ===== UA 检测 =====
@@ -403,7 +403,7 @@
             if (totalAll > 0) globalPrior = totalPos / totalAll;
         }
 
-        function bayesianRating(review, C = 100) {
+        function bayesianRating(review, C = 200) {
             if (!review || review.total <= 0) return 0;
             return (review.positive + C * globalPrior) / (review.total + C);
         }
