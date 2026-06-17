@@ -350,7 +350,7 @@
     </div>
 
     <script>
-        const APP_VERSION = 'v1.9.2';
+        const APP_VERSION = 'v1.9.3';
         const PROXY_BASE = '__PROXY_BASE__';
 
         // ===== UA 检测 =====
@@ -988,7 +988,9 @@
             const panel = document.getElementById('toolbar');
             const header = panel.querySelector('.toolbar-header');
             const EDGE = 30;
+            const SHOW_DELAY = 300;
             let hideTimer = null;
+            let showTimer = null;
             let overWrap = false;
             let side = 'right';
 
@@ -1011,13 +1013,16 @@
             }
 
             function showOnSide(newSide) {
-                panel.style.transition = 'none';
-                if (panel.classList.contains('visible')) panel.classList.remove('visible');
-                setSide(newSide);
-                void panel.offsetHeight;
-                panel.style.transition = '';
-                panel.classList.add('visible');
-                wrap.classList.add('pointer-active');
+                clearTimeout(showTimer);
+                showTimer = setTimeout(() => {
+                    panel.style.transition = 'none';
+                    if (panel.classList.contains('visible')) panel.classList.remove('visible');
+                    setSide(newSide);
+                    void panel.offsetHeight;
+                    panel.style.transition = '';
+                    panel.classList.add('visible');
+                    wrap.classList.add('pointer-active');
+                }, SHOW_DELAY);
             }
 
             document.addEventListener('mousemove', (e) => {
@@ -1032,6 +1037,7 @@
                     }
                     clearTimeout(hideTimer);
                 } else if (!nearEdge && !overWrap && panel.classList.contains('visible')) {
+                    clearTimeout(showTimer);
                     scheduleHide();
                 }
             });
@@ -1039,6 +1045,7 @@
             wrap.addEventListener('mouseenter', () => {
                 overWrap = true;
                 clearTimeout(hideTimer);
+                clearTimeout(showTimer);
             });
             wrap.addEventListener('mouseleave', () => {
                 overWrap = false;
@@ -1050,6 +1057,7 @@
                     panel.classList.remove('visible');
                     wrap.classList.remove('pointer-active');
                     clearTimeout(hideTimer);
+                    clearTimeout(showTimer);
                 }
             });
         })();
