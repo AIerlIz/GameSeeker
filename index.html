@@ -351,7 +351,7 @@
     </div>
 
     <script>
-        const APP_VERSION = 'v1.9.6';
+        const APP_VERSION = 'v1.9.7';
         const PROXY_BASE = '__PROXY_BASE__';
 
         // ===== UA 检测 =====
@@ -501,28 +501,36 @@
                 window.open('https://byrutgame.org/?do=search&subaction=search&story=' + encodeURIComponent(cached), '_blank');
                 return;
             }
+            const win = window.open('', '_blank');
             const proxyUrl = `${PROXY_BASE}/https://store.steampowered.com/api/appdetails?appids=${appid}&l=english`;
+            const navigate = (url) => {
+                if (win && !win.closed) win.location.href = url;
+                else window.location.href = url;
+            };
             fetch(proxyUrl)
                 .then(r => r.json())
                 .then(data => {
                     const enName = data[appid]?.data?.name || fallback;
                     _enNameCache.set(appid, enName);
-                    window.open('https://byrutgame.org/?do=search&subaction=search&story=' + encodeURIComponent(enName), '_blank');
+                    navigate('https://byrutgame.org/?do=search&subaction=search&story=' + encodeURIComponent(enName));
                 })
                 .catch(() => {
-                    window.open('https://byrutgame.org/?do=search&subaction=search&story=' + encodeURIComponent(fallback), '_blank');
+                    navigate('https://byrutgame.org/?do=search&subaction=search&story=' + encodeURIComponent(fallback));
                 });
         }
 
         function prefetchEnglishNames(games) {
-            games.forEach(g => {
-                if (!g.appid || _enNameCache.has(g.appid)) return;
-                const proxyUrl = `${PROXY_BASE}/https://store.steampowered.com/api/appdetails?appids=${g.appid}&l=english`;
-                fetch(proxyUrl)
-                    .then(r => r.json())
-                    .then(data => { const n = data[g.appid]?.data?.name; if (n) _enNameCache.set(g.appid, n); })
-                    .catch(() => {});
-            });
+            const pending = games.filter(g => g.appid && !_enNameCache.has(g.appid));
+            for (let i = 0; i < pending.length; i += 8) {
+                const batch = pending.slice(i, i + 8);
+                batch.forEach(g => {
+                    const proxyUrl = `${PROXY_BASE}/https://store.steampowered.com/api/appdetails?appids=${g.appid}&l=english`;
+                    fetch(proxyUrl)
+                        .then(r => r.json())
+                        .then(data => { const n = data[g.appid]?.data?.name; if (n) _enNameCache.set(g.appid, n); })
+                        .catch(() => {});
+                });
+            }
         }
 
         // ===== 复制游戏名（通过 CF Proxy 查 Steam 英文名） =====
@@ -553,10 +561,16 @@
             };
 
             if (appid) {
+                const cached = _enNameCache.get(appid);
+                if (cached) { doCopy(cached); return; }
                 const proxyUrl = `${PROXY_BASE}/https://store.steampowered.com/api/appdetails?appids=${appid}&l=english`;
                 fetch(proxyUrl)
                     .then(r => r.json())
-                    .then(data => doCopy(data[appid]?.data?.name || fallbackText))
+                    .then(data => {
+                        const n = data[appid]?.data?.name;
+                        if (n) _enNameCache.set(appid, n);
+                        doCopy(n || fallbackText);
+                    })
                     .catch(() => doCopy(fallbackText));
             } else {
                 doCopy(fallbackText);
