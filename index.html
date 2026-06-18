@@ -351,7 +351,7 @@
     </div>
 
     <script>
-        const APP_VERSION = 'v1.9.3';
+        const APP_VERSION = 'v1.9.4';
         const PROXY_BASE = '__PROXY_BASE__';
 
         // ===== UA 检测 =====
@@ -457,9 +457,9 @@
                         <img class="ss-lightbox-img" src="">
                     </div>` : ''}
                     <div class="card-actions">
-                        <a href="https://store.steampowered.com/app/${game.appid}/" target="_blank" class="btn-steam" onclick="event.stopPropagation()" style="flex:1">
+                        <a href="https://byrutgame.org/?do=search&subaction=search&story=${encodeURIComponent(game.name)}" target="_blank" class="btn-steam" data-name="${attrEsc(game.name)}" onclick="searchByrut(event);return false;" style="flex:1">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
-                            在 Steam 中查看
+                            在 byrutgame 搜索
                         </a>
                     </div>
                 </div>
@@ -480,6 +480,44 @@
                 statSection: isRec ? renderPrice(game.price, game.is_free) : ptText,
                 overlayText: game.reason || game.short_description || '',
                 overlayLabel: game.reason ? 'AI 推荐理由' : '游戏简介',
+            });
+        }
+
+        // ===== 通过 CF Proxy 查 Steam 英文名（byrutgame 搜索 + 复制共用） =====
+        const _enNameCache = new Map();
+
+        function searchByrut(e) {
+            e.preventDefault();
+            const a = e.currentTarget;
+            const card = a.closest('.game-card');
+            const appid = card.dataset.appid;
+            const fallback = a.dataset.name;
+            const cached = _enNameCache.get(appid);
+            if (cached) {
+                window.open('https://byrutgame.org/?do=search&subaction=search&story=' + encodeURIComponent(cached), '_blank');
+                return;
+            }
+            const proxyUrl = `${PROXY_BASE}/https://store.steampowered.com/api/appdetails?appids=${appid}&l=english`;
+            fetch(proxyUrl)
+                .then(r => r.json())
+                .then(data => {
+                    const enName = data[appid]?.data?.name || fallback;
+                    _enNameCache.set(appid, enName);
+                    window.open('https://byrutgame.org/?do=search&subaction=search&story=' + encodeURIComponent(enName), '_blank');
+                })
+                .catch(() => {
+                    window.open('https://byrutgame.org/?do=search&subaction=search&story=' + encodeURIComponent(fallback), '_blank');
+                });
+        }
+
+        function prefetchEnglishNames(games) {
+            games.forEach(g => {
+                if (!g.appid || _enNameCache.has(g.appid)) return;
+                const proxyUrl = `${PROXY_BASE}/https://store.steampowered.com/api/appdetails?appids=${g.appid}&l=english`;
+                fetch(proxyUrl)
+                    .then(r => r.json())
+                    .then(data => { const n = data[g.appid]?.data?.name; if (n) _enNameCache.set(g.appid, n); })
+                    .catch(() => {});
             });
         }
 
@@ -930,6 +968,7 @@
                     libLoaded = true;
                     document.getElementById('libTabCount').textContent = libraryGames.length;
                     rebuildLibUI();
+                    prefetchEnglishNames(libraryGames);
                 })
                 .catch(() => {
                     document.getElementById('libraryGrid').innerHTML = '<div class="loading-state"><div class="ls-icon">📡</div><div class="ls-text">加载失败</div><div class="ls-sub">无法连接到游戏库，请检查网络后重试</div><button class="ls-btn" onclick="loadLibraryData()">重试</button></div>';
@@ -976,6 +1015,7 @@
                 recGamesAll = games;
                 computeGlobalPrior();
                 rebuildRecUI();
+                prefetchEnglishNames(games);
                 document.getElementById('footer').innerHTML = 'GameSeeker · 由 AI + DeepSteam V50 算法生成 | ' + new Date().toISOString().slice(0, 10) + ' <span id="version" style="color:#334155">' + APP_VERSION + '</span>';
                 bindGridWheel();
             })
