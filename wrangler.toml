@@ -10,7 +10,7 @@ id = ""
 preview_id = ""
 
 [triggers]
-crons = ["0 3 * * *", "30 3 * * 1"]
+crons = ["0 3 * * *", "30 3 * * 1", "0 4 * * *"]
 
 [env.production]
 [env.preview]

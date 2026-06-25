@@ -2,6 +2,7 @@ import { autoRecommend } from './lib/deepsteam.js';
 import { fetchSteam } from './scripts/fetch-steam.js';
 import { fetchLibrary } from './scripts/fetch-library.js';
 import { fillDetails } from './scripts/fill-details.js';
+import { handleWebhook, notifyRecommendResult, notifyLibraryResult, checkDiscounts } from './lib/telegram.js';
 
 function uuid() {
   return crypto.randomUUID();
@@ -369,6 +370,21 @@ export default {
       return jsonResponse(data || { games: [], total_games: 0, total_playtime_hours: 0 });
     }
 
+    if (path === '/api/bot/webhook') {
+      return handleWebhook(request, env);
+    }
+
+    if (path === '/api/bot/set-webhook') {
+      const token = (await env.KV.get('config:TELEGRAM_BOT_TOKEN'));
+      if (!token) return new Response('Bot not configured', { status: 200 });
+      const webhookUrl = `${url.protocol}//${url.host}/api/bot/webhook`;
+      const resp = await fetch(
+        `https://api.telegram.org/bot${token}/setWebhook?url=${encodeURIComponent(webhookUrl)}`,
+      );
+      const result = await resp.json();
+      return jsonResponse(result);
+    }
+
     if (path.startsWith('/api/proxy/')) {
       const targetUrl = path.replace('/api/proxy/', '') + url.search;
       try {
@@ -391,16 +407,27 @@ export default {
     switch (event.cron) {
       case '0 3 * * *': {
         console.log('开始每日自动推荐...');
-        await autoRecommend(env).catch(e => console.error('autoRecommend 失败:', e));
-        console.log('开始拉取 Steam 详情...');
+        const recs = await autoRecommend(env).catch(e => {
+          console.error('autoRecommend 失败:', e);
+          return [];
+        });
         await fetchSteam(env).catch(e => console.error('fetchSteam 失败:', e));
+        await notifyRecommendResult(env, recs?.length || 0).catch(() => {});
         break;
       }
       case '30 3 * * 1': {
         console.log('开始每周游戏库同步...');
+        const libBefore = (await env.KV.get('data:library', 'json'))?.games?.length || 0;
         await fetchLibrary(env).catch(e => console.error('fetchLibrary 失败:', e));
-        console.log('开始补全缺失详情...');
         await fillDetails(env).catch(e => console.error('fillDetails 失败:', e));
+        const libAfter = (await env.KV.get('data:library', 'json'))?.games?.length || 0;
+        const libHours = (await env.KV.get('data:library', 'json'))?.total_playtime_hours || 0;
+        await notifyLibraryResult(env, libAfter, libHours).catch(() => {});
+        break;
+      }
+      case '0 4 * * *': {
+        console.log('开始检查降价...');
+        await checkDiscounts(env).catch(e => console.error('checkDiscounts 失败:', e));
         break;
       }
       default:

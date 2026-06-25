@@ -1,35 +1,44 @@
-# GameSeeker Cloudflare Workers 迁移开发计划
+# GameSeeker 开发计划
 
-## 阶段一：项目骨架
-- 创建 `package.json`（wrangler devDep）
-- 创建 `wrangler.toml`（KV绑定 + cron + assets）
-- 创建目录：`public/`, `worker/lib/`, `worker/scripts/`
+## 第一阶段：CF Worker 迁移（已完成）
+- ~~Python → JS 重写~~
+- ~~Worker 入口 + 管理后台~~
+- ~~前段迁移 + 清理旧文件~~
 
-## 阶段二：Python → JS 重写
-- `worker/lib/steam.js` — Steam API 封装（重试/退避/并发）
-- `worker/lib/llm.js` — LLM 客户端（OpenAI/DeepSeek/Qwen）
-- `worker/lib/deepsteam.js` — DeepSteam 算法（多兴趣路由/RRF/系列过滤）
-- `worker/scripts/fetch-steam.js` — 增量拉取 Steam 详情
-- `worker/scripts/fetch-library.js` — 全量游戏库同步
-- `worker/scripts/fill-details.js` — 补全缺失详情
+## 第二阶段：Telegram Bot 接入
 
-## 阶段三：Worker 入口 + 管理后台
-- `worker/index.js`
-  - fetch handler: 7 条路由规则
-  - scheduled handler: 2 个 cron 任务
-  - admin 管理面板（内联 HTML/CSS/JS）
-  - 认证中间件（密码 + Cookie session）
+### T1: Bot 核心模块
+- `worker/lib/telegram.js` — Telegram API 封装 + Webhook 处理 + 命令路由
 
-## 阶段四：前端文件迁移
-- `index.html` → `public/index.html`
-- `assets/logo.svg` → `public/assets/logo.svg`
-- 修改 `index.html`：移除 `__PROXY_BASE__`，改为 `/api/proxy/`
-- footer 添加「管理」链接
+### T2: 搜索功能
+- `/search` 三层搜索（本地模糊 → Steam中文 → Steam英文）
+- 中英文对照显示
+- 单条详情 + 多条列表展示
 
-## 阶段五：清理 + 文档
-- 删除 `.github/workflows/`, `.github/actions/`, `.github/scripts/`
-- 删除 `requirements.txt`
-- 更新 `.gitignore`, `README.md`, `AGENTS.md`
+### T3: Bot 命令
+- `/start` 欢迎
+- `/recommend` 今日推荐
+- `/library` 库概况
+- `/stats` 统计
+- `/subscribe /unsubscribe /list` 降价订阅
+- `/run` 管理命令
+- 管理员鉴权
+
+### T4: 通知 + 降价检查
+- Cron 完成通知管理员
+- 降价自动检查 cron（每日 4:00）
+- 降价推送通知
+
+### T5: 集成 Worker
+- 路由 `/api/bot/webhook` 接入
+- `/api/bot/set-webhook` 辅助接口
+- Cron 通知挂钩
+- `wrangler.toml` 更新 cron
+
+### T5: 集成 Worker（已完成）
+- 路由 `/api/bot/webhook` + `/api/bot/set-webhook`
+- Cron 通知挂钩
+- 降价检查 cron `0 4 * * *`
 
 ## 各阶段结束后
 - 代码审查 + 修复 bug
