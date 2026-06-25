@@ -432,15 +432,7 @@ async function cmdList(chatId, env) {
   });
 }
 
-async function cmdRun(action, chatId, env) {
-  const token = (await getTelegramConfig(env)).token;
-  if (!(await isAdmin(chatId, env))) {
-    await tgCall(token, 'sendMessage', { chat_id: chatId, text: '⛔ 仅管理员可用' });
-    return;
-  }
-
-  await tgCall(token, 'sendMessage', { chat_id: chatId, text: `⏳ 开始 ${action}...` });
-
+async function runPipeline(action, chatId, env, token) {
   try {
     if (action === 'recommend') {
       const { autoRecommend } = await import('./deepsteam.js');
@@ -456,8 +448,26 @@ async function cmdRun(action, chatId, env) {
       await tgCall(token, 'sendMessage', { chat_id: chatId, text: '✅ 库同步完成' });
     }
   } catch (e) {
+    console.error(`${action} 管线失败:`, e);
     await tgCall(token, 'sendMessage', { chat_id: chatId, text: `❌ 失败: ${e.message}` });
   }
+}
+
+async function cmdRun(action, chatId, env, ctx) {
+  const token = (await getTelegramConfig(env)).token;
+  if (!(await isAdmin(chatId, env))) {
+    await tgCall(token, 'sendMessage', { chat_id: chatId, text: '⛔ 仅管理员可用' });
+    return;
+  }
+  if (!['recommend', 'library'].includes(action)) {
+    await tgCall(token, 'sendMessage', { chat_id: chatId, text: '使用方式: /run recommend 或 /run library' });
+    return;
+  }
+
+  await tgCall(token, 'sendMessage', { chat_id: chatId, text: `⏳ 开始 ${action}，后台执行中...` });
+  const task = runPipeline(action, chatId, env, token);
+  if (ctx?.waitUntil) ctx.waitUntil(task);
+  else await task;
 }
 
 async function handleCallbackQuery(cb, env) {
@@ -484,7 +494,7 @@ async function handleCallbackQuery(cb, env) {
 
 // ========== Webhook ==========
 
-export async function handleWebhook(request, env) {
+export async function handleWebhook(request, env, ctx) {
   const token = (await getTelegramConfig(env)).token;
   if (!token) return new Response('Bot not configured', { status: 200 });
 
@@ -573,7 +583,7 @@ export async function handleWebhook(request, env) {
       await cmdList(chatId, env);
       break;
     case '/run':
-      await cmdRun(args, chatId, env);
+      await cmdRun(args, chatId, env, ctx);
       break;
     default:
       await tgCall(token, 'sendMessage', {

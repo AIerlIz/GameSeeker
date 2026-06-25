@@ -18,12 +18,18 @@ export class GeminiLLM {
         body: JSON.stringify(payload),
         timeout: 60000,
       });
+      if (!resp.ok) {
+        const text = await resp.text().catch(() => '');
+        throw new Error(`HTTP ${resp.status} ${text.slice(0, 200)}`);
+      }
       const data = await resp.json();
       const parts = data?.candidates?.[0]?.content?.parts || [];
-      return parts[0]?.text || '';
+      const text = parts[0]?.text || '';
+      if (!text) throw new Error('未返回内容');
+      return text;
     } catch (e) {
       console.error('Gemini API 失败:', e);
-      return '';
+      throw new Error(`Gemini API 失败: ${e.message}`);
     }
   }
 }
@@ -50,11 +56,17 @@ export class OpenAILLM {
         body: JSON.stringify(payload),
         timeout: 60000,
       });
+      if (!resp.ok) {
+        const text = await resp.text().catch(() => '');
+        throw new Error(`HTTP ${resp.status} ${text.slice(0, 200)}`);
+      }
       const data = await resp.json();
-      return data?.choices?.[0]?.message?.content || '';
+      const text = data?.choices?.[0]?.message?.content || '';
+      if (!text) throw new Error('未返回内容');
+      return text;
     } catch (e) {
       console.error('OpenAI API 失败:', e);
-      return '';
+      throw new Error(`OpenAI API 失败: ${e.message}`);
     }
   }
 }
@@ -81,6 +93,7 @@ const PROVIDERS = {
 export function createLLM(env) {
   const provider = (env.LLM_PROVIDER || '').toLowerCase();
   if (!provider) throw new Error('未配置 LLM_PROVIDER');
+  if (!env.LLM_API_KEY) throw new Error('未配置 LLM_API_KEY');
   const cls = PROVIDERS[provider];
   if (!cls) throw new Error(`不支持的 LLM 提供商: ${provider}`);
   return new cls(env.LLM_API_KEY, env.LLM_API_BASE, env.LLM_MODEL);

@@ -382,14 +382,28 @@ ${existingText}
 
   const llm = createLLM(llmConfig);
   let response = '';
+  let lastError = null;
   for (let attempt = 0; attempt <= 2; attempt++) {
-    response = await llm.generate(prompt);
-    if (response) break;
+    try {
+      response = await llm.generate(prompt);
+      if (response) break;
+    } catch (e) {
+      lastError = e;
+      console.error(`LLM 第 ${attempt + 1} 次调用失败:`, e);
+    }
   }
-  if (!response) return [];
+  if (!response) {
+    if (lastError) throw lastError;
+    throw new Error('LLM 未返回推荐内容');
+  }
 
   const result = parseLlmResponse(response);
-  if (!result?.recommendations) return [];
+  if (!Array.isArray(result?.recommendations)) {
+    throw new Error('LLM 返回格式无法解析为 recommendations JSON');
+  }
+  if (!result.recommendations.length) {
+    throw new Error('LLM 返回的 recommendations 为空');
+  }
 
   const filtered = [];
   for (const r of result.recommendations) {
@@ -398,6 +412,9 @@ ${existingText}
       r.appid = appid;
       filtered.push(r);
     }
+  }
+  if (!filtered.length) {
+    throw new Error('LLM 推荐的游戏都已拥有或已推荐过');
   }
   return filtered.slice(0, 10);
 }
@@ -450,7 +467,7 @@ export async function autoRecommend(env) {
 
   console.log('LLM分析并推荐...');
   const recommendations = await aiAnalyzeAndRecommend(ownedGamesData, excludeAppids, profile, llmConfig);
-  if (!recommendations?.length) throw new Error('没有新的推荐游戏');
+  if (!recommendations?.length) throw new Error('没有通过过滤的新推荐游戏');
 
   console.log('加权融合排序...');
   for (const rec of recommendations) {

@@ -533,7 +533,7 @@ export default {
     }
 
     if (path === '/api/bot/webhook') {
-      return handleWebhook(request, env);
+      return handleWebhook(request, env, ctx);
     }
 
     if (path === '/api/bot/set-webhook') {
