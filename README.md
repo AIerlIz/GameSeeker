@@ -31,12 +31,12 @@ Cloudflare Worker (worker/index.js)
 - 选择本仓库，保存
 - 创建 KV Namespace（如 `gameseeker-kv`）
 - 在 Worker 设置中绑定 KV，变量名 `KV`
-- 在 KV 中手动写入 `config:ADMIN_PASSWORD`（管理后台密码）
+- 在 Worker 设置 → 变量 → 添加环境变量 `ADMIN_PASSWORD`（管理后台密码）
 
 ### 2. 管理后台配置
 
 - 访问 `https://{your-worker}.workers.dev/admin`
-- 输入初始密码（KV 中的 `config:ADMIN_PASSWORD`）
+- 输入初始密码（环境变量 `ADMIN_PASSWORD`）
 - 在管理页面配置以下 key：
 
 | Key | 说明 |

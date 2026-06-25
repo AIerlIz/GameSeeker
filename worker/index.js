@@ -68,7 +68,7 @@ async function requireAuth(request, env) {
 async function handleAdminLogin(request, env) {
   try {
     const { password } = await request.json();
-    const stored = await env.KV.get('config:ADMIN_PASSWORD');
+    const stored = env.ADMIN_PASSWORD;
     if (!stored || password !== stored) {
       return jsonResponse({ error: '密码错误' }, 401);
     }
@@ -210,7 +210,7 @@ td{font-size:14px}
 </div>
 <div id="toast" class="toast"></div>
 <script>
-const SENSITIVE_KEYS = ['STEAM_API_KEY','LLM_API_KEY','ADMIN_PASSWORD'];
+const SENSITIVE_KEYS = ['STEAM_API_KEY','LLM_API_KEY'];
 
 async function api(path, opts = {}) {
   const resp = await fetch(path, {
