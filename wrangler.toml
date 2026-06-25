@@ -4,11 +4,10 @@ compatibility_date = "2024-10-01"
 
 assets = { directory = "./public", binding = "ASSETS" }
 
-#[[kv_namespaces]]
-#binding = "KV"
-#id = ""
+[[kv_namespaces]]
+binding = "KV"
+id = "8c620e3074b544868fa80fe620416b74"
 #preview_id = ""
-
 [triggers]
 crons = ["0 3 * * *", "30 3 * * 1", "0 4 * * *"]
 
