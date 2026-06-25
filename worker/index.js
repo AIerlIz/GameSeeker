@@ -181,7 +181,7 @@ td{font-size:14px}
   <div id="login-view" class="login-box">
     <h1>GameSeeker</h1>
     <h2>管理后台</h2>
-    <input type="password" id="password-input" class="password-input" placeholder="输入管理员密码" autofocus>
+    <input type="password" id="password-input" class="password-input" placeholder="输入管理员密码" autofocus onkeydown="if(event.key==='Enter')login()">
     <button class="btn btn-primary" onclick="login()" style="width:100%">登录</button>
     <p id="login-error" style="color:#dc2626;margin-top:12px;font-size:13px;display:none"></p>
   </div>
@@ -251,17 +251,22 @@ async function checkAuth() {
 checkAuth();
 
 async function login() {
-  const password = document.getElementById('password-input').value;
-  if (!password) return;
-  const resp = await api('/admin/login', { method: 'POST', body: JSON.stringify({ password }) });
-  if (resp.ok) {
-    document.getElementById('login-view').classList.add('hidden');
-    document.getElementById('admin-view').classList.remove('hidden');
-    loadConfigs();
-  } else {
-    const err = document.getElementById('login-error');
-    err.textContent = '密码错误';
-    err.style.display = 'block';
+  try {
+    const password = document.getElementById('password-input').value;
+    if (!password) { toast('请输入密码', 'error'); return; }
+    const resp = await api('/admin/login', { method: 'POST', body: JSON.stringify({ password }) });
+    if (resp.ok) {
+      document.getElementById('login-view').classList.add('hidden');
+      document.getElementById('admin-view').classList.remove('hidden');
+      loadConfigs();
+    } else {
+      const err = await resp.json().catch(() => ({}));
+      document.getElementById('login-error').textContent = err.error || '登录失败';
+      document.getElementById('login-error').style.display = 'block';
+    }
+  } catch (e) {
+    console.error('登录错误:', e);
+    toast('网络错误: ' + e.message, 'error');
   }
 }
 
