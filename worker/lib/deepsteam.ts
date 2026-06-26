@@ -6,7 +6,10 @@ export {
   aiAnalyzeAndRecommend,
   recommendAlgo,
   saveRecs,
-  getExistingGames,
+  saveRecsKV,
+  getExistingGamesKV,
+  getExistingRecAppids,
   steamSearchByName,
   recommend,
+  recommendForAllUsers,
 } from './recommend.js'

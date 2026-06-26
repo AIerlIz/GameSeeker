@@ -1,5 +1,5 @@
 import { KV_KEYS, addChineseName } from './lib/steam.js'
-import { recommend } from './lib/deepsteam.js'
+import { recommendForAllUsers } from './lib/deepsteam.js'
 import { fetchSteam } from './scripts/fetch-steam.js'
 import { fetchLibrary, syncAllUsers } from './scripts/fetch-library.js'
 import { fillDetails } from './scripts/fill-details.js'
@@ -7,6 +7,7 @@ import { handleWebhook, notifyRecommendResult, notifyLibraryResult, checkDiscoun
 import { steamLoginUrl, verifySteamLogin } from './auth/steam.js'
 import { createSession as createD1Session, getSessionUser, upsertUser, sessionCookie, clearCookie as clearD1Cookie } from './auth/session.js'
 import { handleLibrary } from './api/library.js'
+import { handleRecommendations } from './api/recommendations.js'
 
 async function createSession(env: Env): Promise<string> {
   const id = crypto.randomUUID()
@@ -157,6 +158,8 @@ export default {
 
     if (path === '/api/library') return handleLibrary(env, request)
 
+    if (path === '/api/recommendations') return handleRecommendations(env, request)
+
     if (request.method === 'POST' && path === '/admin/login') {
       return handleAdminLogin(request, env)
     }
@@ -280,13 +283,12 @@ export default {
   async scheduled(event: ScheduledController, env: Env): Promise<void> {
     switch (event.cron) {
       case '0 3 * * *': {
-        console.log('开始每日自动推荐...')
-        const recs = await recommend(env).catch(e => {
-          console.error('recommend 失败:', e)
-          return []
-        })
+        console.log('starting daily recommendations for all users...')
+        const results = await recommendForAllUsers(env).catch(e => { console.error('recommendForAllUsers failed:', e); return [] })
+        for (const r of results) { if (r.error) console.error(`user ${r.userId} rec failed:`, r.error) }
+        console.log(`recs done: ${results.length} users, ${results.reduce((s,r)=>s+r.count,0)} recs`)
         await fetchSteam(env).catch(e => console.error('fetchSteam 失败:', e))
-        await notifyRecommendResult(env, recs?.length || 0).catch(() => {})
+        await notifyRecommendResult(env, results.reduce((s, r) => s + r.count, 0)).catch(() => {})
         break
       }
       case '30 3 * * 1': {

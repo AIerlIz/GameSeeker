@@ -149,7 +149,7 @@ export async function recommendAlgo(
   return filterSeriesDeepsteam(recommendations, ownedGames)
 }
 
-export async function saveRecs(env: Env, recs: Recommendation[], totalOwned: number): Promise<Recommendation[]> {
+export async function saveRecsKV(env: Env, recs: Recommendation[], totalOwned: number): Promise<Recommendation[]> {
   const detailData = await env.KV.get(KV_KEYS.DATA_GAMES_DETAIL, 'json') as { games?: unknown[] } | null
   const existingAppidSet = new Set<number>()
   if (detailData?.games) {
@@ -176,10 +176,38 @@ export async function saveRecs(env: Env, recs: Recommendation[], totalOwned: num
   return recs.slice(0, newEntries.length)
 }
 
-export async function getExistingGames(env: Env): Promise<Set<number>> {
+export async function getExistingGamesKV(env: Env): Promise<Set<number>> {
   const data = await env.KV.get(KV_KEYS.DATA_GAMES_DETAIL, 'json') as { games?: { appid?: number }[] } | null
   if (!data?.games) return new Set()
   return new Set(data.games.map(g => g.appid).filter((id): id is number => id !== undefined))
+}
+
+export async function saveRecs(db: D1Database, userId: string, recs: { appid: number; name: string; reason?: string; score?: number; tags?: string[] }[]): Promise<void> {
+  const now = Math.floor(Date.now() / 1000)
+  await db.prepare('DELETE FROM recommendations WHERE user_id = ?').bind(userId).run()
+  const stmts = recs.map(r => db.prepare(
+    'INSERT INTO recommendations (user_id, appid, name, reason, score, tags, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)'
+  ).bind(userId, r.appid, r.name, r.reason || '', r.score || 0, JSON.stringify(r.tags || []), now))
+  if (stmts.length) await db.batch(stmts)
+}
+
+export async function getExistingRecAppids(db: D1Database, userId: string): Promise<Set<number>> {
+  const rows = await db.prepare('SELECT appid FROM recommendations WHERE user_id = ?').bind(userId).all<{ appid: number }>()
+  return new Set((rows.results || []).map(r => r.appid))
+}
+
+export async function recommendForAllUsers(env: Env): Promise<{ userId: string; count: number; error?: string }[]> {
+  const users = await env.DB.prepare('SELECT id FROM users').all<{ id: string }>()
+  const results = []
+  for (const u of (users.results || [])) {
+    try {
+      const recs = await recommend(env, u.id)
+      results.push({ userId: u.id, count: recs.length })
+    } catch (e) {
+      results.push({ userId: u.id, count: 0, error: String(e) })
+    }
+  }
+  return results
 }
 
 export async function steamSearchByName(name: string): Promise<{ appid: number; name: string; type: string } | null> {
@@ -203,18 +231,29 @@ export async function steamSearchByName(name: string): Promise<{ appid: number; 
   return null
 }
 
-export async function recommend(env: Env): Promise<Recommendation[]> {
-  const steamApiKey = await getConfig(env, 'STEAM_API_KEY')
-  const steamUserId = await getConfig(env, 'STEAM_USER_ID')
+async function getD1Config(db: D1Database, key: string, defaultValue = ''): Promise<string> {
+  const row = await db.prepare('SELECT value FROM config WHERE key = ?').bind(key).first<{ value: string }>()
+  return row?.value || defaultValue
+}
+
+export async function recommend(env: Env, userId?: string): Promise<Recommendation[]> {
+  const db = userId ? env.DB : null
+  const steamApiKey = db ? await getD1Config(db, 'STEAM_API_KEY') : await getConfig(env, 'STEAM_API_KEY')
+  const steamUserId = db ? userId! : await getConfig(env, 'STEAM_USER_ID')
   if (!steamApiKey || !steamUserId) throw new Error('未配置 STEAM_API_KEY 或 STEAM_USER_ID')
 
-  const llmConfig = {
+  const llmConfig = db ? {
+    provider: await getD1Config(db, 'LLM_PROVIDER'),
+    apiKey: await getD1Config(db, 'LLM_API_KEY'),
+    apiBase: await getD1Config(db, 'LLM_API_BASE'),
+    model: await getD1Config(db, 'LLM_MODEL'),
+  } : {
     provider: await getConfig(env, 'LLM_PROVIDER'),
     apiKey: await getConfig(env, 'LLM_API_KEY'),
     apiBase: await getConfig(env, 'LLM_API_BASE'),
     model: await getConfig(env, 'LLM_MODEL'),
   }
-  const k = parseFloat((await getConfig(env, 'RECOMMEND_K')) || '200')
+  const k = parseFloat((db ? await getD1Config(db, 'RECOMMEND_K') : await getConfig(env, 'RECOMMEND_K')) || '200')
   const llmClient = createLLM(llmConfig)
 
   console.log('获取 Steam ID...')
@@ -227,18 +266,25 @@ export async function recommend(env: Env): Promise<Recommendation[]> {
   console.log(`拥有游戏: ${ownedGamesData.length} 款`)
 
   console.log('构建多兴趣画像...')
-  const libraryData = await env.KV.get(KV_KEYS.DATA_LIBRARY, 'json') as { games?: { appid?: number; genres?: string[] }[] } | null
   const libraryGenres: Record<number, string[]> = {}
-  if (libraryData?.games) {
-    for (const g of libraryData.games as { appid?: number; genres?: string[] }[]) {
-      if (g.appid && g.genres) libraryGenres[g.appid] = g.genres
+  if (db) {
+    const libRows = await db.prepare('SELECT appid, genres FROM library WHERE user_id = ?').bind(steamUserId).all<{ appid: number; genres: string }>()
+    for (const r of (libRows.results || [])) {
+      try { libraryGenres[r.appid] = JSON.parse(r.genres || '[]') } catch { libraryGenres[r.appid] = [] }
+    }
+  } else {
+    const libraryData = await env.KV.get(KV_KEYS.DATA_LIBRARY, 'json') as { games?: { appid?: number; genres?: string[] }[] } | null
+    if (libraryData?.games) {
+      for (const g of libraryData.games as { appid?: number; genres?: string[] }[]) {
+        if (g.appid && g.genres) libraryGenres[g.appid] = g.genres
+      }
     }
   }
   const profile = buildUserProfile(ownedGamesData, libraryGenres)
   console.log(`主要品类: ${profile.top_genres?.join(', ')}`)
 
   console.log('检查已存在游戏...')
-  const existingGames = await getExistingGames(env)
+  const existingGames = db ? await getExistingRecAppids(db, steamUserId) : await getExistingGamesKV(env)
   const ownedAppids = new Set(ownedGamesData.map(g => g.appid))
   const excludeAppids = new Set([...existingGames, ...ownedAppids])
 
@@ -249,14 +295,14 @@ export async function recommend(env: Env): Promise<Recommendation[]> {
   const validated: Recommendation[] = []
   const maxValidate = Math.min(filteredRecs.length, 7)
   const verifyBatch = filteredRecs.slice(0, maxValidate)
-  const results = await Promise.all(verifyBatch.map(rec => {
+  const verifyResults = await Promise.all(verifyBatch.map(rec => {
     const nameToSearch = rec.chinese_name
     if (!nameToSearch) return Promise.resolve(null)
     return steamSearchByName(nameToSearch)
   }))
   for (let i = 0; i < verifyBatch.length; i++) {
     const rec = { ...verifyBatch[i] }
-    const corrected = results[i]
+    const corrected = verifyResults[i]
     if (!corrected || corrected.type !== 'app') continue
     rec.appid = corrected.appid
     rec.verified_name = corrected.name
@@ -266,6 +312,10 @@ export async function recommend(env: Env): Promise<Recommendation[]> {
 
   const newRecs = validated.slice(0, 7)
   console.log('保存推荐结果...')
-  await saveRecs(env, newRecs, apiGameCount || ownedGamesData.length)
+  if (db) {
+    await saveRecs(db, steamUserId, newRecs)
+  } else {
+    await saveRecsKV(env, newRecs, apiGameCount || ownedGamesData.length)
+  }
   return newRecs
 }
