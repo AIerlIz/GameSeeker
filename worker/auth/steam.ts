@@ -1,11 +1,12 @@
 import type { SteamUser } from '../types.js'
 
 export function steamLoginUrl(returnUrl: string): string {
+  const realm = new URL(returnUrl).origin
   const params = new URLSearchParams({
     'openid.ns': 'http://specs.openid.net/auth/2.0',
     'openid.mode': 'checkid_setup',
     'openid.return_to': returnUrl,
-    'openid.realm': 'https://steamcommunity.com/openid',
+    'openid.realm': realm,
     'openid.identity': 'http://specs.openid.net/auth/2.0/identifier_select',
     'openid.claimed_id': 'http://specs.openid.net/auth/2.0/identifier_select',
   })
@@ -39,6 +40,6 @@ export async function verifySteamLogin(url: URL, db: D1Database): Promise<SteamU
 }
 
 function extractSteamId(claimedId: string): string | null {
-  const match = claimedId.match(/\/id\/(\d+)$/)
+  const match = claimedId.match(/\/(?:id|profiles)\/(\d+)/)
   return match ? match[1] : null
 }
