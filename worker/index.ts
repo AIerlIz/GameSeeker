@@ -1,9 +1,11 @@
-import { KV_KEYS } from './lib/steam.js'
+import { KV_KEYS, addChineseName } from './lib/steam.js'
 import { recommend } from './lib/deepsteam.js'
 import { fetchSteam } from './scripts/fetch-steam.js'
 import { fetchLibrary } from './scripts/fetch-library.js'
 import { fillDetails } from './scripts/fill-details.js'
 import { handleWebhook, notifyRecommendResult, notifyLibraryResult, checkDiscounts } from './lib/telegram.js'
+import { steamLoginUrl, verifySteamLogin } from './auth/steam.js'
+import { createSession as createD1Session, getSessionUser, upsertUser, sessionCookie, clearCookie as clearD1Cookie } from './auth/session.js'
 
 async function createSession(env: Env): Promise<string> {
   const id = crypto.randomUUID()
@@ -128,6 +130,30 @@ export default {
     const url = new URL(request.url)
     const path = url.pathname
 
+    if (path === '/api/auth/steam') {
+      const returnPath = url.searchParams.get('return') || '/'
+      const returnUrl = `${url.protocol}//${url.host}/api/auth/steam/callback?return=${encodeURIComponent(returnPath)}`
+      return Response.redirect(steamLoginUrl(returnUrl), 302)
+    }
+
+    if (path === '/api/auth/steam/callback') {
+      const user = await verifySteamLogin(url, env.DB)
+      if (!user) return new Response('Auth failed', { status: 401 })
+      await upsertUser(env.DB, user)
+      const sessionId = await createD1Session(env.DB, user)
+      const redirectPath = url.searchParams.get('return') || '/'
+      return new Response(null, { status: 302, headers: { Location: redirectPath, 'Set-Cookie': sessionCookie(sessionId) } })
+    }
+
+    if (path === '/api/auth/status') {
+      const user = await getSessionUser(env.DB, request)
+      return jsonResponse(user ? { loggedIn: true, user } : { loggedIn: false })
+    }
+
+    if (path === '/api/auth/logout' && request.method === 'POST') {
+      return new Response(JSON.stringify({ ok: true }), { headers: { 'Content-Type': 'application/json', 'Set-Cookie': clearD1Cookie() } })
+    }
+
     if (request.method === 'POST' && path === '/admin/login') {
       return handleAdminLogin(request, env)
     }
@@ -200,6 +226,27 @@ export default {
       )
       const result = await resp.json()
       return jsonResponse(result)
+    }
+
+    if (path === '/api/bot/seed-chinese-names') {
+      const session = await requireAuth(request, env)
+      if (!session) return jsonResponse({ error: '未登录' }, 401)
+      const libData = await env.KV.get(KV_KEYS.DATA_LIBRARY, 'json') as { games?: { appid: number; name?: string }[] } | null
+      const detailData = await env.KV.get(KV_KEYS.DATA_GAMES_DETAIL, 'json') as { games?: { appid: number; name?: string }[] } | null
+      const appids = new Set<number>()
+      for (const g of libData?.games || []) if (g.appid) appids.add(g.appid)
+      for (const g of detailData?.games || []) if (g.appid) appids.add(g.appid)
+      return jsonResponse({ total: appids.size, message: 'Chinese name index available' })
+    }
+
+    if (path === '/api/bot/add-chinese-name') {
+      const session = await requireAuth(request, env)
+      if (!session) return jsonResponse({ error: '未登录' }, 401)
+      if (request.method !== 'POST') return jsonResponse({ error: 'POST required' }, 405)
+      const body = await request.json() as { name?: string; appid?: number }
+      if (!body.name || !body.appid) return jsonResponse({ error: '缺少 name 或 appid' }, 400)
+      await addChineseName(env, body.name, body.appid)
+      return jsonResponse({ ok: true })
     }
 
     if (path.startsWith('/api/proxy/')) {

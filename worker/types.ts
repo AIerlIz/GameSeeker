@@ -1,5 +1,11 @@
 // ====== 领域类型 ======
 
+export interface SteamUser {
+  steamid: string
+  personaname: string
+  avatar: string
+}
+
 export interface Game {
   appid: number
   name: string
