@@ -77,6 +77,7 @@ select:focus{outline:none;border-color:#a855f7}
       <div style="display:flex;gap:12px;flex-wrap:wrap">
         <button class="btn btn-primary" onclick="saveTelegram()">保存配置</button>
         <button class="btn btn-primary" onclick="setWebhook()">设置 Webhook</button>
+        <button class="btn btn-primary" onclick="setCommands()" style="margin-left:8px">注册菜单</button>
       </div>
       <p id="tg-status" style="margin-top:8px;font-size:13px;color:#94a3b8"></p>
     </div>
@@ -338,6 +339,17 @@ async function saveTelegram() {
     loadConfigs();
   } else {
     toast('保存失败', 'error');
+  }
+}
+
+async function setCommands() {
+  const resp = await api('/api/bot/set-commands');
+  const data = await resp.json();
+  if (data.ok) {
+    toast('菜单注册成功');
+    document.getElementById('tg-status').textContent = '✅ 菜单已注册';
+  } else {
+    toast('菜单注册失败: ' + (data.description || '未知错误'), 'error');
   }
 }
 

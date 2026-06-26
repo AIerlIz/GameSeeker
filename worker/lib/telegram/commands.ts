@@ -16,6 +16,19 @@ export async function handleSearch(query: string, chatId: number, env: Env): Pro
     const detailData = await env.KV.get(KV_KEYS.DATA_GAMES_DETAIL, 'json') as { games?: { name?: string; appid?: number }[] } | null
     const allGames = detailData?.games || []
     localResults = searchLocal(allGames, query)
+
+    // also search user's library (has Chinese names from fill-details)
+    const libData = await env.KV.get(KV_KEYS.DATA_LIBRARY, 'json') as { games?: { name?: string; appid?: number }[] } | null
+    if (libData?.games) {
+      for (const g of libData.games) {
+        if (g.name && g.appid && !localResults.some(r => r.appid === g.appid)) {
+          const lowered = g.name.toLowerCase()
+          if (lowered.includes(query.toLowerCase())) {
+            localResults.push({ appid: g.appid, name: g.name })
+          }
+        }
+      }
+    }
   }
 
   if (localResults.length > 0 && localResults.length <= 8) {
@@ -44,9 +57,10 @@ export async function handleSearch(query: string, chatId: number, env: Env): Pro
   let searchLang = isChinese ? 'schinese' : 'english'
   let searchResult = await steamStoreSearch(query, searchLang)
 
-  if (!searchResult.items?.length && !isChinese) {
-    searchResult = await steamStoreSearch(query, 'schinese')
-    searchLang = 'schinese'
+  if (!searchResult.items?.length) {
+    const altLang = isChinese ? 'english' : 'schinese'
+    searchResult = await steamStoreSearch(query, altLang)
+    searchLang = altLang
   }
 
   if (!searchResult.items?.length) {

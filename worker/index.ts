@@ -163,6 +163,31 @@ export default {
       return handleWebhook(request, env, ctx)
     }
 
+    if (path === '/api/bot/set-commands') {
+      const session = await requireAuth(request, env)
+      if (!session) return jsonResponse({ error: '未登录' }, 401)
+      const tgData = await env.KV.get(KV_KEYS.CONFIG_TELEGRAM, 'json') as Record<string, unknown> | null
+      const token = tgData?.token as string | undefined
+      if (!token) return new Response('Bot not configured', { status: 200 })
+      const commands = [
+        { command: 'start', description: '显示菜单' },
+        { command: 'search', description: '搜索游戏' },
+        { command: 'recommend', description: '今日推荐' },
+        { command: 'library', description: '我的游戏库' },
+        { command: 'stats', description: '统计信息' },
+        { command: 'subscribe', description: '订阅降价通知' },
+        { command: 'unsubscribe', description: '取消订阅' },
+        { command: 'list', description: '订阅列表' },
+        { command: 'run', description: '管理后台管线' },
+      ]
+      const resp = await fetch(
+        `https://api.telegram.org/bot${token}/setMyCommands`,
+        { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ commands }) },
+      )
+      const result = await resp.json()
+      return jsonResponse(result)
+    }
+
     if (path === '/api/bot/set-webhook') {
       const session = await requireAuth(request, env)
       if (!session) return jsonResponse({ error: '未登录' }, 401)
