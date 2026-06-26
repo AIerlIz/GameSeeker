@@ -8,7 +8,7 @@ Always respond in Chinese. All communication must be in Chinese unless the user 
 
 Cloudflare Workers + D1 全栈部署：
 - `worker/index.ts` — Worker 入口（fetch + cron）
-- `worker/types.ts` — 领域类型 + KVStore/SteamAPIClient/LLMClient 接口
+- `worker/types.ts` — 领域类型 + SteamAPIClient/LLMClient 接口
 - `worker/env.d.ts` — 全局 `Env` interface 合并（追加 `ADMIN_PASSWORD` 和 `DB: D1Database`）
 - `worker/lib/` — 核心库（kv-keys.ts / steam-api.ts / steam.ts / llm.ts / deepsteam.ts / scoring.ts / profile.ts / genre-data.ts / recommend.ts / telegram.ts）
 - `worker/scripts/` — 数据管线脚本（fetch-steam.ts / fetch-library.ts / fill-details.ts）
@@ -18,7 +18,7 @@ Cloudflare Workers + D1 全栈部署：
 - `test/` — 单元测试（Vitest + MockSteamClient）
 - `public/` — 静态前端文件（index.html / admin.html）
 
-存储层：D1 为主存储（用户、游戏库、推荐、订阅、配置），KV 为 Telegram Bot 会话缓存和旧管线兼容层（过渡期）。
+存储层：D1 为全存储（用户、游戏库、推荐、订阅、配置、Telegram Bot 会话、通知、中文名索引）
 
 ## 开发命令
 
@@ -33,7 +33,7 @@ Cloudflare Workers + D1 全栈部署：
 
 - `.ts` 文件 import 路径使用 `.js` 后缀（wrangler esbuild 约定）
 - 类型优先使用 `types.ts` 中定义的 interface，避免 `any`
-- KV 键名前缀通过 `kv-keys.ts` 中的 `KV_KEYS` 常量访问
+- 配置项通过 `config` 表存储，`kv-keys.ts` 提供类型安全的读取函数
 - 测试使用 MockSteamClient（实现 SteamAPIClient 接口）
 
 ## Agent skills

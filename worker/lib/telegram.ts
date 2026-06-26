@@ -1,4 +1,4 @@
-import { KV_KEYS, getTelegramConfig } from './kv-keys.js'
+import { getTelegramConfig } from './kv-keys.js'
 import { tgCall, escMd, fetchBatchAppDetails, sendGameDetail } from './telegram/utils.js'
 import { initDB } from '../db/index.js'
 import {
@@ -16,7 +16,7 @@ import {
 import { getSession } from './telegram/session.js'
 
 export async function handleWebhook(request: Request, env: Env, ctx: { waitUntil?: (p: Promise<void>) => void }): Promise<Response> {
-  const token = (await getTelegramConfig(env)).token as string | undefined
+  const token = (await getTelegramConfig(env.DB)).token
   if (!token) return new Response('Bot not configured', { status: 200 })
 
   if (request.method !== 'POST') {
@@ -67,7 +67,7 @@ export async function handleWebhook(request: Request, env: Env, ctx: { waitUntil
 
   // numeric reply — fallback for old search results
   if (/^\d+$/.test(text) && !text.startsWith('/')) {
-    const session = await getSession(env, chatId)
+    const session = await getSession(env.DB, chatId)
     if (session.search) {
       const num = parseInt(text)
       const results = session.search.results
@@ -115,9 +115,9 @@ export async function handleWebhook(request: Request, env: Env, ctx: { waitUntil
 }
 
 export async function notify(env: Env, text: string): Promise<void> {
-  const config = await getTelegramConfig(env)
-  const token = config.token as string | undefined
-  const adminChatId = config.adminChatId as string | undefined
+  const config = await getTelegramConfig(env.DB)
+  const token = config.token
+  const adminChatId = config.adminChatId
   if (!token || !adminChatId) return
   await tgCall(token, 'sendMessage', {
     chat_id: parseInt(adminChatId),
@@ -129,8 +129,8 @@ export async function notify(env: Env, text: string): Promise<void> {
 export async function checkDiscountsD1(env: Env): Promise<void> {
   await initDB(env.DB)
 
-  const config = await getTelegramConfig(env)
-  const token = config.token as string | undefined
+  const config = await getTelegramConfig(env.DB)
+  const token = config.token
   if (!token) return
 
   const subs = await env.DB.prepare(
@@ -142,8 +142,12 @@ export async function checkDiscountsD1(env: Env): Promise<void> {
   const appids = [...new Set(subs.results.map(s => s.appid))]
   const cnMap = await fetchBatchAppDetails(appids, 'schinese')
 
-  const notifiedKey = KV_KEYS.notifiedKey('d1_notified')
-  const notified: Record<string, number> = (await env.KV.get(notifiedKey, 'json') as Record<string, number> | null) || {}
+  const notifiedKey = 'd1_notified'
+  const row = await env.DB.prepare('SELECT data FROM bot_notified WHERE key=?').bind(notifiedKey).first<{ data: string }>()
+  let notified: Record<string, number> = {}
+  if (row?.data) {
+    try { notified = JSON.parse(row.data) } catch { /* ignore */ }
+  }
 
   for (const sub of subs.results) {
     const d = cnMap[sub.appid]
@@ -182,5 +186,6 @@ export async function checkDiscountsD1(env: Env): Promise<void> {
     }
   }
 
-  await env.KV.put(notifiedKey, JSON.stringify(notified))
+  await env.DB.prepare('INSERT OR REPLACE INTO bot_notified (key, data) VALUES (?, ?)')
+    .bind(notifiedKey, JSON.stringify(notified)).run()
 }

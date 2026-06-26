@@ -143,6 +143,7 @@ export async function fetchReview(appid: number, lang = 'schinese'): Promise<Rec
   return null
 }
 
-export async function getConfig(env: Env, key: string, defaultValue = ''): Promise<string> {
-  return (await env.KV.get(`config:${key}`)) || defaultValue
+export async function getConfig(db: D1Database, key: string, defaultValue = ''): Promise<string> {
+  const row = await db.prepare('SELECT value FROM config WHERE key=?').bind(key).first<{ value: string }>()
+  return row?.value || defaultValue
 }

@@ -1,4 +1,4 @@
-import { getTelegramConfig } from './lib/kv-keys.js'
+import { getTelegramConfig, addChineseName } from './lib/kv-keys.js'
 import { recommendForAllUsers } from './lib/deepsteam.js'
 import { syncAllUsers } from './scripts/fetch-library.js'
 import { handleWebhook, checkDiscountsD1 } from './lib/telegram.js'
@@ -17,8 +17,8 @@ function jsonResponse(data: unknown, status = 200): Response {
 }
 
 async function getBotToken(env: Env): Promise<string | undefined> {
-  const tgData = await getTelegramConfig(env)
-  return tgData.token as string | undefined
+  const tgData = await getTelegramConfig(env.DB)
+  return tgData.token
 }
 
 // ---------- Main Handler ----------
@@ -95,6 +95,13 @@ export default {
       )
       const result = await resp.json()
       return jsonResponse(result)
+    }
+
+    if (path === '/api/bot/add-chinese-name' && request.method === 'POST') {
+      const body = await request.json() as { name?: string; appid?: number }
+      if (!body.name || !body.appid) return jsonResponse({ ok: false, error: '缺少 name 或 appid' }, 400)
+      await addChineseName(env.DB, body.name, body.appid)
+      return jsonResponse({ ok: true })
     }
 
     if (path.startsWith('/api/proxy/')) {

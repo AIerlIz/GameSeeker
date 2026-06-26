@@ -5,8 +5,8 @@ import { initDB } from '../../db/index.js'
 
 export async function handleSearch(query: string, chatId: number, env: Env): Promise<void> {
   await initDB(env.DB)
-  const config = await getTelegramConfig(env)
-  const token = config.token as string | undefined
+  const config = await getTelegramConfig(env.DB)
+  const token = config.token
   if (!token) return
   if (query.length < 2) {
     await tgCall(token, 'sendMessage', { chat_id: chatId, text: '⚠️ 至少输入 2 个字符' })
@@ -33,7 +33,7 @@ export async function handleSearch(query: string, chatId: number, env: Env): Pro
 
     const totalPages = Math.ceil(items.length / 5)
     await sendSearchResults(token, chatId, items, 0, totalPages)
-    await saveSession(env, chatId, {
+    await saveSession(env.DB, chatId, {
       search: { results: items, query, currentPage: 0, totalPages, isSteamSearch: false },
     })
 
@@ -58,7 +58,7 @@ export async function handleSearch(query: string, chatId: number, env: Env): Pro
 
   if (!searchResult.items?.length) {
     if (isChinese) {
-      const idx = await getChineseNameIndex(env)
+      const idx = await getChineseNameIndex(env.DB)
       const lc = query.toLowerCase()
       const matched = Object.entries(idx).find(([cn]) => cn.toLowerCase() === lc)
       if (matched) {
@@ -69,7 +69,7 @@ export async function handleSearch(query: string, chatId: number, env: Env): Pro
         ])
         const items = [{ appid, name: (enMap[appid] as { name?: string } | undefined)?.name || query }]
         await sendSearchResults(token, chatId, items, 0, 1)
-        await saveSession(env, chatId, { search: { results: items, query, currentPage: 0, totalPages: 1, isSteamSearch: false } })
+        await saveSession(env.DB, chatId, { search: { results: items, query, currentPage: 0, totalPages: 1, isSteamSearch: false } })
         await sendGameDetail(token, chatId, appid, cnMap[appid] || { name: query }, enMap[appid] as Record<string, unknown> | undefined, true)
         return
       }
@@ -91,7 +91,7 @@ export async function handleSearch(query: string, chatId: number, env: Env): Pro
 
   const totalPages = Math.ceil(items.length / 5)
   await sendSearchResults(token, chatId, items, 0, totalPages)
-  await saveSession(env, chatId, {
+  await saveSession(env.DB, chatId, {
     search: { results: items, query, currentPage: 0, totalPages, isSteamSearch: true },
   })
 
@@ -211,8 +211,8 @@ export async function cmdStats(token: string, chatId: number, env: Env): Promise
 }
 
 export async function cmdSubscribe(args: string, chatId: number, env: Env): Promise<void> {
-  const config = await getTelegramConfig(env)
-  const token = config.token as string | undefined
+  const config = await getTelegramConfig(env.DB)
+  const token = config.token
   if (!token || !args) {
     await tgCall(token || '', 'sendMessage', { chat_id: chatId, text: '请指定游戏名，如 /subscribe 黑神话:悟空' })
     return
@@ -245,8 +245,8 @@ export async function cmdSubscribe(args: string, chatId: number, env: Env): Prom
 }
 
 export async function cmdUnsubscribe(args: string, chatId: number, env: Env): Promise<void> {
-  const config = await getTelegramConfig(env)
-  const token = config.token as string | undefined
+  const config = await getTelegramConfig(env.DB)
+  const token = config.token
   const userRow = await env.DB.prepare('SELECT id FROM users WHERE chat_id=?').bind(String(chatId)).first<{ id: string }>()
   const userId = userRow?.id || String(chatId)
   const subs = await env.DB.prepare(
@@ -277,8 +277,8 @@ export async function cmdUnsubscribe(args: string, chatId: number, env: Env): Pr
 }
 
 export async function cmdList(chatId: number, env: Env): Promise<void> {
-  const config = await getTelegramConfig(env)
-  const token = config.token as string | undefined
+  const config = await getTelegramConfig(env.DB)
+  const token = config.token
   const userRow = await env.DB.prepare('SELECT id FROM users WHERE chat_id=?').bind(String(chatId)).first<{ id: string }>()
   const userId = userRow?.id || String(chatId)
   const subs = await env.DB.prepare('SELECT appid, name FROM subscriptions WHERE user_id=?')
@@ -322,8 +322,8 @@ async function runPipeline(action: string, chatId: number, env: Env, token: stri
 }
 
 export async function cmdRun(action: string, chatId: number, env: Env, ctx: { waitUntil?: (p: Promise<void>) => void }): Promise<void> {
-  const config = await getTelegramConfig(env)
-  const token = config.token as string | undefined
+  const config = await getTelegramConfig(env.DB)
+  const token = config.token
   if (!token) return
   if (!(await isAdmin(chatId, env))) {
     await tgCall(token, 'sendMessage', { chat_id: chatId, text: '⛔ 仅管理员可用' })
@@ -356,8 +356,8 @@ export async function cmdRun(action: string, chatId: number, env: Env, ctx: { wa
 }
 
 export async function handleCallbackQuery(cb: { data?: string; id?: string; message?: { chat?: { id?: number }; message_id?: number } }, env: Env): Promise<void> {
-  const config = await getTelegramConfig(env)
-  const token = config.token as string | undefined
+  const config = await getTelegramConfig(env.DB)
+  const token = config.token
   if (!token) return
   // always answer callback query FIRST so Telegram stops the spinner
   if (cb.id) {
@@ -420,10 +420,10 @@ export async function handleCallbackQuery(cb: { data?: string; id?: string; mess
   // srch_{page} — pagination
   if (data.startsWith('srch_')) {
     const page = parseInt(data.replace('srch_', ''))
-    const session = await getSession(env, chatId)
+    const session = await getSession(env.DB, chatId)
     if (!session.search) return
     session.search.currentPage = page
-    await saveSession(env, chatId, session)
+    await saveSession(env.DB, chatId, session)
     // edit existing message
     const startIdx = page * 5
     const pageItems = session.search.results.slice(startIdx, startIdx + 5)
@@ -450,7 +450,7 @@ export async function handleCallbackQuery(cb: { data?: string; id?: string; mess
 
   // back_search — return to search results
   if (data === 'back_search') {
-    const session = await getSession(env, chatId)
+    const session = await getSession(env.DB, chatId)
     if (!session.search) {
       await tgCall(token, 'answerCallbackQuery', { callback_query_id: cb.id, text: '搜索已过期，请重新搜索' })
       return

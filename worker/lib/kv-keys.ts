@@ -1,37 +1,29 @@
-export const KV_KEYS = {
-  DATA_CHINESE_NAMES: 'data:chinese_names',
-  CONFIG_TELEGRAM: 'config:TELEGRAM',
-  CONFIG_PREFIX: 'config:',
-  SUB_PREFIX: 'sub:',
-  LASTSEARCH_PREFIX: 'lastsearch:',
-  NOTIFIED_SUFFIX: '_notified',
-  configKey: (key: string) => `config:${key}`,
-  subKey: (chatId: number | string) => `sub:${String(chatId)}`,
-  lastSearchKey: (chatId: number | string) => `lastsearch:${String(chatId)}`,
-  sessionKey: (chatId: number | string) => `session:${String(chatId)}`,
-  notifiedKey: (subKey: string) => `${subKey}_notified`,
-}
-
 const BUILTIN_CHINESE_NAMES: Record<string, number> = {
   '泰拉瑞亚': 105600,
 }
 
-export async function getChineseNameIndex(env: Env): Promise<Record<string, number>> {
-  const stored = await env.KV.get(KV_KEYS.DATA_CHINESE_NAMES, 'json') as Record<string, number> | null
-  return { ...BUILTIN_CHINESE_NAMES, ...(stored || {}) }
+export async function getChineseNameIndex(db: D1Database): Promise<Record<string, number>> {
+  const rows = await db.prepare('SELECT name, appid FROM chinese_names').all<{ name: string; appid: number }>()
+  const map = { ...BUILTIN_CHINESE_NAMES }
+  for (const r of (rows.results || [])) { map[r.name] = r.appid }
+  return map
 }
 
-export async function addChineseName(env: Env, cnName: string, appid: number): Promise<void> {
-  const stored = await env.KV.get(KV_KEYS.DATA_CHINESE_NAMES, 'json') as Record<string, number> | null
-  const map: Record<string, number> = { ...(stored || {}), [cnName]: appid }
-  await env.KV.put(KV_KEYS.DATA_CHINESE_NAMES, JSON.stringify(map))
+export async function addChineseName(db: D1Database, cnName: string, appid: number): Promise<void> {
+  await db.prepare('INSERT OR REPLACE INTO chinese_names (name, appid) VALUES (?, ?)').bind(cnName, appid).run()
 }
 
-export async function getTelegramConfig(env: Env): Promise<Record<string, unknown>> {
-  const data = await env.KV.get(KV_KEYS.CONFIG_TELEGRAM, 'json')
-  return (data || {}) as Record<string, unknown>
+export async function getTelegramConfig(db: D1Database): Promise<{ token?: string; adminChatId?: string }> {
+  const rows = await db.prepare('SELECT key, value FROM config WHERE key IN (?, ?)')
+    .bind('TELEGRAM_TOKEN', 'TELEGRAM_ADMIN_CHAT_ID').all<{ key: string; value: string }>()
+  const cfg: Record<string, string> = {}
+  for (const r of (rows.results || [])) { cfg[r.key] = r.value }
+  return { token: cfg.TELEGRAM_TOKEN, adminChatId: cfg.TELEGRAM_ADMIN_CHAT_ID }
 }
 
-export async function setTelegramConfig(env: Env, config: { token?: string; adminChatId?: string }): Promise<void> {
-  await env.KV.put(KV_KEYS.CONFIG_TELEGRAM, JSON.stringify(config))
+export async function setTelegramConfig(db: D1Database, config: { token?: string; adminChatId?: string }): Promise<void> {
+  const stmts = []
+  if (config.token !== undefined) stmts.push(db.prepare('INSERT OR REPLACE INTO config (key, value) VALUES (?, ?)').bind('TELEGRAM_TOKEN', config.token))
+  if (config.adminChatId !== undefined) stmts.push(db.prepare('INSERT OR REPLACE INTO config (key, value) VALUES (?, ?)').bind('TELEGRAM_ADMIN_CHAT_ID', config.adminChatId))
+  if (stmts.length) await db.batch(stmts)
 }

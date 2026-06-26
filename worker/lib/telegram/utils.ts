@@ -213,6 +213,6 @@ export async function sendSearchResults(
 }
 
 export async function isAdmin(chatId: number | string, env: Env): Promise<boolean> {
-  const config = await getTelegramConfig(env)
+  const config = await getTelegramConfig(env.DB)
   return String(chatId) === String(config?.adminChatId || '')
 }

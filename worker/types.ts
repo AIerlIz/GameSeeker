@@ -86,56 +86,11 @@ export interface Recommendation {
   owners?: number
 }
 
-export interface Subscription {
-  appid: number
-  name: string
-  added: number
-}
-
-export interface TelegramConfig {
-  token?: string
-  adminChatId?: string
-}
-
-export interface AdminSession {
-  id: string
-  created: number
-}
-
-export interface LastSearch {
-  results: { appid: number; name: string }[]
-}
-
 export interface StoreSearchResult {
   items: { id: number; name: string; type: string }[]
 }
 
 // ====== 接口 ======
-
-export interface KVStore {
-  getGames(): Promise<GamesData>
-  saveGames(data: GamesData): Promise<void>
-  getGamesDetail(): Promise<GamesDetailData>
-  saveGamesDetail(data: GamesDetailData): Promise<void>
-  getLibrary(): Promise<GameLibrary | null>
-  saveLibrary(library: GameLibrary): Promise<void>
-  getConfig(key: string): Promise<string | null>
-  setConfig(key: string, value: string): Promise<void>
-  deleteConfig(key: string): Promise<void>
-  getAllConfigs(): Promise<Record<string, string>>
-  getTelegramConfig(): Promise<TelegramConfig>
-  setTelegramConfig(config: TelegramConfig): Promise<void>
-  getSubscriptions(chatId: number | string): Promise<Subscription[]>
-  saveSubscriptions(chatId: number | string, subs: Subscription[]): Promise<void>
-  getAllSubKeys(): Promise<string[]>
-  getLastSearch(chatId: number | string): Promise<LastSearch | null>
-  saveLastSearch(chatId: number | string, data: LastSearch, ttl: number): Promise<void>
-  getAdminSession(id: string): Promise<AdminSession | null>
-  setAdminSession(id: string, data: AdminSession, ttl: number): Promise<void>
-  deleteAdminSession(id: string): Promise<void>
-  getNotified(key: string): Promise<Record<string, number>>
-  saveNotified(key: string, data: Record<string, number>): Promise<void>
-}
 
 export interface SteamAPIClient {
   resolveVanityUrl(vanityUrl: string): Promise<string | null>
