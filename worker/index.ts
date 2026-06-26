@@ -139,6 +139,12 @@ export default {
       return jsonResponse(user ? { loggedIn: true, user } : { loggedIn: false })
     }
 
+    if (path === '/api/auth/steam/config-check') {
+      const row = await env.DB.prepare('SELECT value FROM config WHERE key = ? AND value != ?')
+        .bind('STEAM_API_KEY', '').first()
+      return jsonResponse({ configured: !!row })
+    }
+
     if (path === '/api/auth/logout' && request.method === 'POST') {
       return new Response(JSON.stringify({ ok: true }), { headers: { 'Content-Type': 'application/json', 'Set-Cookie': clearD1Cookie() } })
     }

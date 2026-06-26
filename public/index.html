@@ -51,6 +51,13 @@ async function checkAuth() {
     main.innerHTML = `<div class="login-box"><a href="/api/auth/steam"><img src="https://steamcommunity-a.akamaihd.net/public/images/signinthroughsteam/sits_01.png" alt="Sign in through Steam"></a></div>`
     return
   }
+  // 检查是否已配置 STEAM_API_KEY
+  const cfgResp = await fetch('/api/auth/steam/config-check')
+  const cfg = await cfgResp.json()
+  if (!cfg.configured) {
+    main.innerHTML = `<div class="login-box"><p>⚠️ 系统未配置 STEAM_API_KEY，请先前往管理后台配置</p><p style="margin-top:12px"><a href="/admin" class="btn btn-primary" style="color:#fff;text-decoration:none;padding:10px 20px;background:#238636;border-radius:6px;display:inline-block">打开管理后台</a></p></div>`
+    return
+  }
   user = data.user
   header.style.display = 'block'
   navigate(window.location.hash.slice(1) || '/')
