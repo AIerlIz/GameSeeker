@@ -44,19 +44,16 @@ export async function handleSearch(query: string, chatId: number, env: Env): Pro
   let searchLang = isChinese ? 'schinese' : 'english'
   let searchResult = await steamStoreSearch(query, searchLang)
 
-  if (!searchResult.items?.length && isChinese) {
-    searchResult = await steamStoreSearch(query, 'english')
-    searchLang = 'english'
-  }
   if (!searchResult.items?.length && !isChinese) {
     searchResult = await steamStoreSearch(query, 'schinese')
     searchLang = 'schinese'
   }
 
   if (!searchResult.items?.length) {
+    const hint = isChinese ? '\n💡 试试用英文名搜索，例如 Terraria → terraria' : ''
     await tgCall(token, 'sendMessage', {
       chat_id: chatId,
-      text: '❌ 未找到相关游戏，换个关键词试试',
+      text: `❌ 未找到相关游戏${hint}`,
     })
     return
   }
@@ -348,11 +345,16 @@ export async function handleCallbackQuery(cb: { data?: string; id?: string; mess
   // detail_{appid} — show game detail
   if (data.startsWith('detail_')) {
     const appid = parseInt(data.replace('detail_', ''))
-    const [cnMap, enMap] = await Promise.all([
-      fetchBatchAppDetails([appid], 'schinese'),
-      fetchBatchAppDetails([appid], 'english'),
-    ])
-    await sendGameDetail(token, chatId, appid, cnMap[appid], enMap[appid], true)
+    try {
+      const [cnMap, enMap] = await Promise.all([
+        fetchBatchAppDetails([appid], 'schinese'),
+        fetchBatchAppDetails([appid], 'english'),
+      ])
+      await sendGameDetail(token, chatId, appid, cnMap[appid], enMap[appid], true)
+    } catch (e) {
+      console.error('detail error:', appid, e)
+      await sendGameDetail(token, chatId, appid, null, null, true)
+    }
     return
   }
 
