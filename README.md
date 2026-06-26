@@ -4,12 +4,12 @@
 
 <h1 align="center">识游 · GameSeeker</h1>
 
-<p align="center">AI 驱动的 Steam 游戏探索工具 · Cloudflare Workers 原生部署</p>
+<p align="center">AI 驱动的 Steam 游戏探索工具 · Cloudflare Workers 原生部署 · TypeScript 全栈</p>
 
 ## 架构
 
 ```
-Cloudflare Worker (worker/index.js)
+Cloudflare Worker (worker/index.ts)
 ├── fetch handler
 │   ├── /               → Assets (public/index.html)
 │   ├── /games.json     → KV data:games
@@ -65,18 +65,31 @@ Cloudflare Worker (worker/index.js)
 
 | 文件 | 功能 |
 |------|------|
-| `worker/index.js` | Worker 入口：路由分发 + 管理后台 + Cron 调度 |
-| `worker/lib/steam.js` | Steam API 封装：请求重试/退避/并发/详情/评测 |
-| `worker/lib/llm.js` | LLM 客户端：OpenAI / DeepSeek / Qwen |
-| `worker/lib/deepsteam.js` | DeepSteam 算法：多兴趣路由 + IDF 加权 + RRF 融合 + 系列过滤 |
-| `worker/scripts/fetch-steam.js` | 增量拉取 Steam 详情合并 |
-| `worker/scripts/fetch-library.js` | 全量游戏库获取 |
-| `worker/scripts/fill-details.js` | 补全缺失的游戏详情 |
+| `worker/index.ts` | Worker 入口：路由分发 + 管理后台 + Cron 调度 |
+| `worker/lib/steam.ts` | Steam API 封装：请求重试/退避/并发/详情/评测 |
+| `worker/lib/steam-api.ts` | HttpSteamClient 实现（SteamAPIClient 接口） |
+| `worker/lib/store.ts` | CfKvStore 实现（KVStore 接口） |
+| `worker/lib/llm.ts` | LLM 客户端：OpenAI / DeepSeek / Qwen |
+| `worker/lib/scoring.ts` | 加权评分 + 系列过滤算法 |
+| `worker/lib/profile.ts` | 用户多兴趣画像构建 |
+| `worker/lib/recommend.ts` | 推荐管线编排（LLM + 评分 + 验证) |
+| `worker/lib/genre-data.ts` | 品类聚类 + 系列模式数据 |
+| `worker/lib/telegram.ts` | Telegram Bot 路由 + 通知 |
+| `worker/types.ts` | 领域类型 + 接口定义 |
 | `public/index.html` | 前端单页应用 |
+| `test/` | 单元测试（Vitest + InMemoryKvStore + MockSteamClient） |
 
 ## 本地开发
 
 ```bash
 npm install
-npx wrangler dev
+npm run dev         # wrangler dev
+npm run typecheck   # 类型检查
+npm run lint        # ESLint
+npm test            # 单元测试
+npm run format      # Prettier 格式化
 ```
+
+## 项目约定
+
+详见 `AGENTS.md`。
