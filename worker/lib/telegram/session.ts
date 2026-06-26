@@ -1,6 +1,6 @@
 import { initDB } from '../../db/index.js'
 
-const TTL = 600
+const TTL = 1800 // 30 minutes
 
 export interface SearchResultItem { appid: number; name: string }
 export interface SessionState { search?: { results: SearchResultItem[]; query: string; currentPage: number; totalPages: number; isSteamSearch: boolean } }

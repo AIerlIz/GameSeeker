@@ -131,7 +131,9 @@ export default {
       await upsertUser(env.DB, user)
       const sessionId = await createD1Session(env.DB, user)
       const redirectPath = url.searchParams.get('return') || '/'
-      return new Response(null, { status: 302, headers: { Location: redirectPath, 'Set-Cookie': sessionCookie(sessionId) } })
+      // Prevent open redirect: only allow relative paths starting with /
+      const safeRedirect = redirectPath.startsWith('/') && !redirectPath.startsWith('//') ? redirectPath : '/'
+      return new Response(null, { status: 302, headers: { Location: safeRedirect, 'Set-Cookie': sessionCookie(sessionId) } })
     }
 
     if (path === '/api/auth/status') {
@@ -211,9 +213,16 @@ export default {
         }
       } catch { return new Response('Invalid URL', { status: 400 }) }
       try {
+        const safeHeaders = new Headers()
+        for (const [key, value] of request.headers.entries()) {
+          const lower = key.toLowerCase()
+          if (lower === 'content-type' || lower === 'accept' || lower === 'accept-language') {
+            safeHeaders.set(key, value)
+          }
+        }
         const resp = await fetch(targetUrl, {
           method: request.method,
-          headers: request.headers,
+          headers: safeHeaders,
         })
         const headers = new Headers(resp.headers)
         headers.set('Access-Control-Allow-Origin', '*')

@@ -30,8 +30,8 @@ export function calculateWeightedScore(
     for (const tagLower of recTags) {
       if (tagLower.includes(genreLower) || genreLower.includes(tagLower)) {
         userGenres.add(tagLower)
-        const clusterGames = profile.clusters[genre]
-        const clusterIdf = clusterGames.reduce((s, g) => s + (profile.idf_weights[g.name] || 0.5), 0) / Math.max(clusterGames.length, 1)
+        const clusterGames = profile.clusters[genre] || []
+        const clusterIdf = clusterGames.length > 0 ? clusterGames.reduce((s, g) => s + (profile.idf_weights[g.name] || 0.5), 0) / clusterGames.length : 0
         userIdfSum += clusterIdf
       }
     }

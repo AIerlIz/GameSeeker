@@ -27,7 +27,7 @@ export async function handleLibrary(env: Env, request: Request): Promise<Respons
 
   let where = 'user_id = ?'
   const params: unknown[] = [user.steamid]
-  if (q) { where += ' AND name LIKE ?'; params.push(`%${q}%`) }
+  if (q) { where += ' AND name LIKE ?'; params.push(`%${q.replace(/[%_]/g, '\\$&')}%`) }
 
   const countRow = await env.DB.prepare(`SELECT COUNT(*) as total FROM library WHERE ${where}`)
     .bind(...params).first<{ total: number }>()

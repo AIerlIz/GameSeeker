@@ -123,16 +123,14 @@ export async function cmdStart(token: string, chatId: number): Promise<void> {
 export async function cmdRecommend(token: string, chatId: number, env: Env): Promise<void> {
   await tgCall(token, 'sendChatAction', { chat_id: chatId, action: 'typing' })
   await initDB(env.DB)
-  const adminUsers = await env.DB.prepare('SELECT id FROM users').all<{ id: string }>()
-  let rows: { results?: { appid: number; name: string; reason: string; score: number }[] }
-  if ((adminUsers.results || []).length > 0) {
-    const uid = adminUsers.results![0].id
-    rows = await env.DB.prepare(
-      'SELECT appid, name, reason, score FROM recommendations WHERE user_id=? ORDER BY score DESC LIMIT 5'
-    ).bind(uid).all<{ appid: number; name: string; reason: string; score: number }>()
-  } else {
-    rows = { results: [] }
+  const userRow = await env.DB.prepare('SELECT id FROM users WHERE chat_id=?').bind(String(chatId)).first<{ id: string }>()
+  if (!userRow) {
+    await tgCall(token, 'sendMessage', { chat_id: chatId, text: '📭 尚未登录 Steam，请先通过 Web 端登录' })
+    return
   }
+  const rows = await env.DB.prepare(
+    'SELECT appid, name, reason, score FROM recommendations WHERE user_id=? ORDER BY score DESC LIMIT 5'
+  ).bind(userRow.id).all<{ appid: number; name: string; reason: string; score: number }>()
   const games = rows.results || []
 
   if (!games.length) {
@@ -161,15 +159,14 @@ export async function cmdRecommend(token: string, chatId: number, env: Env): Pro
 export async function cmdLibrary(token: string, chatId: number, env: Env): Promise<void> {
   await tgCall(token, 'sendChatAction', { chat_id: chatId, action: 'typing' })
   await initDB(env.DB)
-  const users = await env.DB.prepare('SELECT id FROM users LIMIT 1').all<{ id: string }>()
-  const uid = (users.results || [])[0]?.id
-  if (!uid) {
-    await tgCall(token, 'sendMessage', { chat_id: chatId, text: '📭 尚未登录 Steam' })
+  const userRow = await env.DB.prepare('SELECT id FROM users WHERE chat_id=?').bind(String(chatId)).first<{ id: string }>()
+  if (!userRow) {
+    await tgCall(token, 'sendMessage', { chat_id: chatId, text: '📭 尚未登录 Steam，请先通过 Web 端登录' })
     return
   }
   const rows = await env.DB.prepare(
     'SELECT name, playtime_hours FROM library WHERE user_id=? ORDER BY playtime_hours DESC'
-  ).bind(uid).all<{ name: string; playtime_hours: number }>()
+  ).bind(userRow.id).all<{ name: string; playtime_hours: number }>()
   const games = rows.results || []
   if (!games.length) {
     await tgCall(token, 'sendMessage', { chat_id: chatId, text: '📭 库数据为空' })
@@ -188,18 +185,17 @@ export async function cmdLibrary(token: string, chatId: number, env: Env): Promi
 export async function cmdStats(token: string, chatId: number, env: Env): Promise<void> {
   await tgCall(token, 'sendChatAction', { chat_id: chatId, action: 'typing' })
   await initDB(env.DB)
-  const users = await env.DB.prepare('SELECT id FROM users LIMIT 1').all<{ id: string }>()
-  const uid = (users.results || [])[0]?.id
-  if (!uid) {
-    await tgCall(token, 'sendMessage', { chat_id: chatId, text: '📭 尚未登录 Steam' })
+  const userRow = await env.DB.prepare('SELECT id FROM users WHERE chat_id=?').bind(String(chatId)).first<{ id: string }>()
+  if (!userRow) {
+    await tgCall(token, 'sendMessage', { chat_id: chatId, text: '📭 尚未登录 Steam，请先通过 Web 端登录' })
     return
   }
   const libRow = await env.DB.prepare(
     'SELECT COUNT(*) as count, COALESCE(SUM(playtime_hours),0) as hours FROM library WHERE user_id=?'
-  ).bind(uid).first<{ count: number; hours: number }>()
+  ).bind(userRow.id).first<{ count: number; hours: number }>()
   const recRow = await env.DB.prepare(
     'SELECT COUNT(*) as count FROM recommendations WHERE user_id=?'
-  ).bind(uid).first<{ count: number }>()
+  ).bind(userRow.id).first<{ count: number }>()
   const libCount = libRow?.count || 0
   const libHours = libRow?.hours || 0
   const recCount = recRow?.count || 0
@@ -226,11 +222,11 @@ export async function cmdSubscribe(args: string, chatId: number, env: Env): Prom
   const name = searchResult.items[0].name
 
   const userRow = await env.DB.prepare('SELECT id FROM users WHERE chat_id=?').bind(String(chatId)).first<{ id: string }>()
-  const userId = userRow?.id || String(chatId)
   if (!userRow) {
-    await env.DB.prepare('INSERT INTO users (id, chat_id) VALUES (?, ?) ON CONFLICT(id) DO UPDATE SET chat_id=excluded.chat_id')
-      .bind(userId, String(chatId)).run()
+    await tgCall(token, 'sendMessage', { chat_id: chatId, text: '⚠️ 请先通过 Web 端 Steam 登录后再订阅' })
+    return
   }
+  const userId = userRow.id
 
   await env.DB.prepare(
     'INSERT INTO subscriptions (user_id, appid, name) VALUES (?, ?, ?) ON CONFLICT(user_id, appid) DO NOTHING'
@@ -248,7 +244,11 @@ export async function cmdUnsubscribe(args: string, chatId: number, env: Env): Pr
   const config = await getTelegramConfig(env.DB)
   const token = config.token
   const userRow = await env.DB.prepare('SELECT id FROM users WHERE chat_id=?').bind(String(chatId)).first<{ id: string }>()
-  const userId = userRow?.id || String(chatId)
+  if (!userRow) {
+    await tgCall(token || '', 'sendMessage', { chat_id: chatId, text: '⚠️ 请先通过 Web 端 Steam 登录' })
+    return
+  }
+  const userId = userRow.id
   const subs = await env.DB.prepare(
     'SELECT id, appid, name FROM subscriptions WHERE user_id=?'
   ).bind(userId).all<{ id: number; appid: number; name: string }>()
@@ -280,7 +280,11 @@ export async function cmdList(chatId: number, env: Env): Promise<void> {
   const config = await getTelegramConfig(env.DB)
   const token = config.token
   const userRow = await env.DB.prepare('SELECT id FROM users WHERE chat_id=?').bind(String(chatId)).first<{ id: string }>()
-  const userId = userRow?.id || String(chatId)
+  if (!userRow) {
+    await tgCall(token || '', 'sendMessage', { chat_id: chatId, text: '⚠️ 请先通过 Web 端 Steam 登录' })
+    return
+  }
+  const userId = userRow.id
   const subs = await env.DB.prepare('SELECT appid, name FROM subscriptions WHERE user_id=?')
     .bind(userId).all<{ appid: number; name: string }>()
   const subsList = subs.results || []
@@ -390,10 +394,13 @@ export async function handleCallbackQuery(cb: { data?: string; id?: string; mess
     const appid = parseInt(data.replace('sub_', ''))
     if (!appid) return
     const userRow = await env.DB.prepare('SELECT id FROM users WHERE chat_id=?').bind(String(chatId)).first<{ id: string }>()
-    const userId = userRow?.id || String(chatId)
+    if (!userRow) {
+      await tgCall(token, 'answerCallbackQuery', { callback_query_id: cb.id, text: '请先通过 Web 端登录' })
+      return
+    }
     await env.DB.prepare(
       'INSERT INTO subscriptions (user_id, appid, name) VALUES (?, ?, ?) ON CONFLICT(user_id, appid) DO NOTHING'
-    ).bind(userId, appid, '通过搜索添加').run()
+    ).bind(userRow.id, appid, '通过搜索添加').run()
     await tgCall(token, 'answerCallbackQuery', { callback_query_id: cb.id, text: '✅ 已订阅降价通知' })
     return
   }
@@ -402,13 +409,16 @@ export async function handleCallbackQuery(cb: { data?: string; id?: string; mess
   if (data.startsWith('unsub_')) {
     const idx = parseInt(data.replace('unsub_', ''))
     const userRow = await env.DB.prepare('SELECT id FROM users WHERE chat_id=?').bind(String(chatId)).first<{ id: string }>()
-    const userId = userRow?.id || String(chatId)
+    if (!userRow) {
+      await tgCall(token, 'answerCallbackQuery', { callback_query_id: cb.id, text: '请先通过 Web 端登录' })
+      return
+    }
     const subs = await env.DB.prepare('SELECT id, name FROM subscriptions WHERE user_id=? ORDER BY added_at')
-      .bind(userId).all<{ id: number; name: string }>()
+      .bind(userRow.id).all<{ id: number; name: string }>()
     const subsList = subs.results || []
     if (idx >= 0 && idx < subsList.length) {
       const removed = subsList[idx]
-      await env.DB.prepare('DELETE FROM subscriptions WHERE id=? AND user_id=?').bind(removed.id, userId).run()
+      await env.DB.prepare('DELETE FROM subscriptions WHERE id=? AND user_id=?').bind(removed.id, userRow.id).run()
       await tgCall(token, 'answerCallbackQuery', { callback_query_id: cb.id, text: `✅ 已取消 ${removed.name}` })
       await cmdList(chatId, env)
     } else {
