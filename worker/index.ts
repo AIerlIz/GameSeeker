@@ -6,6 +6,7 @@ import { fillDetails } from './scripts/fill-details.js'
 import { handleWebhook, notifyRecommendResult, notifyLibraryResult, checkDiscounts } from './lib/telegram.js'
 import { steamLoginUrl, verifySteamLogin } from './auth/steam.js'
 import { createSession as createD1Session, getSessionUser, upsertUser, sessionCookie, clearCookie as clearD1Cookie } from './auth/session.js'
+import { handleLibrary } from './api/library.js'
 
 async function createSession(env: Env): Promise<string> {
   const id = crypto.randomUUID()
@@ -153,6 +154,8 @@ export default {
     if (path === '/api/auth/logout' && request.method === 'POST') {
       return new Response(JSON.stringify({ ok: true }), { headers: { 'Content-Type': 'application/json', 'Set-Cookie': clearD1Cookie() } })
     }
+
+    if (path === '/api/library') return handleLibrary(env, request)
 
     if (request.method === 'POST' && path === '/admin/login') {
       return handleAdminLogin(request, env)
