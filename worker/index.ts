@@ -1,7 +1,7 @@
 import { KV_KEYS, addChineseName } from './lib/steam.js'
 import { recommend } from './lib/deepsteam.js'
 import { fetchSteam } from './scripts/fetch-steam.js'
-import { fetchLibrary } from './scripts/fetch-library.js'
+import { fetchLibrary, syncAllUsers } from './scripts/fetch-library.js'
 import { fillDetails } from './scripts/fill-details.js'
 import { handleWebhook, notifyRecommendResult, notifyLibraryResult, checkDiscounts } from './lib/telegram.js'
 import { steamLoginUrl, verifySteamLogin } from './auth/steam.js'
@@ -290,7 +290,15 @@ export default {
         break
       }
       case '30 3 * * 1': {
-        console.log('开始每周游戏库同步...')
+        console.log('开始每周多用户游戏库同步...')
+        const syncResults = await syncAllUsers(env).catch(e => {
+          console.error('syncAllUsers 失败:', e)
+          return []
+        })
+        for (const r of syncResults) {
+          if (r.error) console.error(`用户 ${r.userId} 同步失败:`, r.error)
+        }
+        console.log(`同步完成: ${syncResults.length} 位用户, ${syncResults.reduce((s, r) => s + r.gameCount, 0)} 款游戏`)
         await fetchLibrary(env).catch(e => console.error('fetchLibrary 失败:', e))
         await fillDetails(env).catch(e => console.error('fillDetails 失败:', e))
         const libData = await env.KV.get(KV_KEYS.DATA_LIBRARY, 'json') as { games?: unknown[]; total_playtime_hours?: number } | null

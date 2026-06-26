@@ -4,6 +4,7 @@ export const KV_KEYS = {
   DATA_GAMES: 'data:games',
   DATA_GAMES_DETAIL: 'data:games_detail',
   DATA_LIBRARY: 'data:library',
+  DATA_CHINESE_NAMES: 'data:chinese_names',
   CONFIG_TELEGRAM: 'config:TELEGRAM',
   CONFIG_PREFIX: 'config:',
   SUB_PREFIX: 'sub:',
@@ -16,6 +17,21 @@ export const KV_KEYS = {
   sessionKey: (chatId: number | string) => `session:${String(chatId)}`,
   adminSessionKey: (id: string) => `admin:session:${id}`,
   notifiedKey: (subKey: string) => `${subKey}_notified`,
+}
+
+const BUILTIN_CHINESE_NAMES: Record<string, number> = {
+  '泰拉瑞亚': 105600,
+}
+
+export async function getChineseNameIndex(env: Env): Promise<Record<string, number>> {
+  const stored = await env.KV.get(KV_KEYS.DATA_CHINESE_NAMES, 'json') as Record<string, number> | null
+  return { ...BUILTIN_CHINESE_NAMES, ...(stored || {}) }
+}
+
+export async function addChineseName(env: Env, cnName: string, appid: number): Promise<void> {
+  const stored = await env.KV.get(KV_KEYS.DATA_CHINESE_NAMES, 'json') as Record<string, number> | null
+  const map: Record<string, number> = { ...(stored || {}), [cnName]: appid }
+  await env.KV.put(KV_KEYS.DATA_CHINESE_NAMES, JSON.stringify(map))
 }
 
 export function sleep(ms: number): Promise<void> {
@@ -125,7 +141,7 @@ export async function getSteamId(steamApiKey: string, steamUserId: string): Prom
   return ''
 }
 
-export async function getOwnedGames(steamApiKey: string, steamId: string): Promise<{ games: { appid: number; name: string; playtime_hours: number }[]; count: number }> {
+export async function getOwnedGames(steamApiKey: string, steamId: string): Promise<{ games: { appid: number; name: string; playtime_hours: number; playtime_forever: number }[]; count: number }> {
   if (!steamApiKey || !steamId) return { games: [], count: 0 }
   const url = `https://api.steampowered.com/IPlayerService/GetOwnedGames/v1/?key=${steamApiKey}&steamid=${steamId}&include_appinfo=true`
   try {
@@ -137,6 +153,7 @@ export async function getOwnedGames(steamApiKey: string, steamId: string): Promi
         appid: g.appid,
         name: g.name || '',
         playtime_hours: Math.round((g.playtime_forever || 0) / 60 * 10) / 10,
+        playtime_forever: g.playtime_forever || 0,
       }))
       .filter(g => g.appid)
     return { games, count: respData.game_count || games.length }
